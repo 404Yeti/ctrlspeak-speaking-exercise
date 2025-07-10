@@ -1,7 +1,20 @@
+export const config = {
+  api: {
+    bodyParser: false
+  }
+};
+
 export default async function handler(req, res) {
   try {
-    const body = req.body || {};
-    const { text } = body;
+    // Manually parse the body
+    const rawBody = await new Promise((resolve, reject) => {
+      let body = '';
+      req.on('data', chunk => body += chunk);
+      req.on('end', () => resolve(body));
+      req.on('error', err => reject(err));
+    });
+
+    const { text } = JSON.parse(rawBody);
 
     if (!text) {
       return res.status(400).json({ error: "Missing 'text' in request body." });
@@ -37,12 +50,10 @@ Respond with **only** a valid JSON object. No code blocks, no extra explanation,
     });
 
     const result = await openaiResponse.json();
-    console.log("🧠 OpenAI raw result:", JSON.stringify(result, null, 2));
+    const content = result.choices?.[0]?.message?.content;
 
-    const content = result?.choices?.[0]?.message?.content;
+    console.log("🧠 OpenAI raw result:", content);
 
-
-    // Clean up possible formatting issues from GPT
     let cleaned = content?.replace(/```json|```|\n/g, "").trim();
     let feedbackObj;
 
