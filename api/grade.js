@@ -20,12 +20,10 @@ Evaluate the explanation based on:
 
 Give a score from 1 to 10. Then provide 1–2 sentences of constructive feedback.
 
-Respond ONLY in this JSON format:
-{
-  "score": number,
-  "feedback": "string"
-}
+Respond with **only** a valid JSON object. No code blocks, no extra explanation, no text before or after. Format:
+{"score": 8, "feedback": "Your answer was clear and used the correct terminology."}
 `;
+
 
     const openaiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
