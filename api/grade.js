@@ -1,7 +1,7 @@
 export default async function handler(req, res) {
   try {
-    // Parse JSON body safely (Vercel gives raw text in req.body)
-    const body = req.method === "POST" ? JSON.parse(req.body) : {};
+    // Use the body directly – works for Postman, fetch, etc.
+    const body = req.body || {};
     const { text } = body;
 
     if (!text) {
@@ -59,3 +59,4 @@ Respond ONLY in this JSON format:
     });
   }
 }
+
