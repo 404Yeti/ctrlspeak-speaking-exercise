@@ -1,6 +1,5 @@
 export default async function handler(req, res) {
   try {
-    // Use the body directly – works for Postman, fetch, etc.
     const body = req.body || {};
     const { text } = body;
 
@@ -24,7 +23,6 @@ Respond with **only** a valid JSON object. No code blocks, no extra explanation,
 {"score": 8, "feedback": "Your answer was clear and used the correct terminology."}
 `;
 
-
     const openaiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -41,11 +39,18 @@ Respond with **only** a valid JSON object. No code blocks, no extra explanation,
     const result = await openaiResponse.json();
     const content = result.choices?.[0]?.message?.content;
 
-    const match = content?.match(/\{[\s\S]*?\}/);
-    const feedbackObj = match ? JSON.parse(match[0]) : {
-      score: 5,
-      feedback: "Couldn't parse AI response. Please try again."
-    };
+    // Clean up possible formatting issues from GPT
+    let cleaned = content?.replace(/```json|```|\n/g, "").trim();
+    let feedbackObj;
+
+    try {
+      feedbackObj = JSON.parse(cleaned);
+    } catch (e) {
+      feedbackObj = {
+        score: 5,
+        feedback: "Couldn't parse AI response. Please try again.\n\nRaw: " + content
+      };
+    }
 
     res.status(200).json(feedbackObj);
 
@@ -57,4 +62,3 @@ Respond with **only** a valid JSON object. No code blocks, no extra explanation,
     });
   }
 }
-
