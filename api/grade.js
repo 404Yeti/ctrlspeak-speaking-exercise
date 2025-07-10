@@ -49,8 +49,11 @@ Respond with **only** a valid JSON object. No code blocks, no extra explanation,
       })
     });
 
-    const result = await openaiResponse.json();
-    const content = result.choices?.[0]?.message?.content;
+   const result = await openaiResponse.json();
+  console.log("🧠 Full OpenAI Response:", JSON.stringify(result, null, 2));
+
+  const content = result?.choices?.[0]?.message?.content;
+
 
     console.log("🧠 OpenAI raw result:", content);
 
