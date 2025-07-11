@@ -4,14 +4,31 @@ export const config = {
   }
 };
 
-export default async function handler(req, res) {
+// CORS wrapper for cross-origin requests from https://ctrlspeak.com
+function allowCors(handler) {
+  return async (req, res) => {
+    res.setHeader("Access-Control-Allow-Credentials", true);
+    res.setHeader("Access-Control-Allow-Origin", "https://ctrlspeak.com");
+    res.setHeader("Access-Control-Allow-Methods", "GET,OPTIONS,PATCH,DELETE,POST,PUT");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type,Authorization");
+
+    if (req.method === "OPTIONS") {
+      res.status(200).end();
+      return;
+    }
+
+    return handler(req, res);
+  };
+}
+
+async function handler(req, res) {
   try {
-    // Manually parse the raw body
+    // Parse raw body manually
     const rawBody = await new Promise((resolve, reject) => {
-      let body = '';
-      req.on('data', chunk => body += chunk);
-      req.on('end', () => resolve(body));
-      req.on('error', err => reject(err));
+      let body = "";
+      req.on("data", chunk => (body += chunk));
+      req.on("end", () => resolve(body));
+      req.on("error", err => reject(err));
     });
 
     if (!rawBody) {
@@ -50,7 +67,7 @@ Respond with **only** a valid JSON object. No code blocks, no extra explanation,
     const openaiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
+        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
@@ -79,7 +96,6 @@ Respond with **only** a valid JSON object. No code blocks, no extra explanation,
     }
 
     res.status(200).json(feedbackObj);
-
   } catch (err) {
     console.error("💥 Error in /api/grade:", err);
     res.status(500).json({
@@ -88,3 +104,5 @@ Respond with **only** a valid JSON object. No code blocks, no extra explanation,
     });
   }
 }
+
+export default allowCors(handler);
