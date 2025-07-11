@@ -6,7 +6,7 @@ export const config = {
 
 export default async function handler(req, res) {
   try {
-    // Manually parse the body
+    // Manually parse the raw body
     const rawBody = await new Promise((resolve, reject) => {
       let body = '';
       req.on('data', chunk => body += chunk);
@@ -14,10 +14,21 @@ export default async function handler(req, res) {
       req.on('error', err => reject(err));
     });
 
-    const { text } = JSON.parse(rawBody);
+    if (!rawBody) {
+      return res.status(400).json({ error: "Empty request body." });
+    }
+
+    let parsed;
+    try {
+      parsed = JSON.parse(rawBody);
+    } catch (e) {
+      return res.status(400).json({ error: "Invalid JSON body." });
+    }
+
+    const { text } = parsed;
 
     if (!text) {
-      return res.status(400).json({ error: "Missing 'text' in request body." });
+      return res.status(400).json({ error: "Missing 'text' field in request body." });
     }
 
     const prompt = `
@@ -49,12 +60,10 @@ Respond with **only** a valid JSON object. No code blocks, no extra explanation,
       })
     });
 
-   const result = await openaiResponse.json();
-  console.log("🧠 Full OpenAI Response:", JSON.stringify(result, null, 2));
+    const result = await openaiResponse.json();
+    console.log("🧠 Full OpenAI Response:", JSON.stringify(result, null, 2));
 
-  const content = result?.choices?.[0]?.message?.content;
-
-
+    const content = result?.choices?.[0]?.message?.content;
     console.log("🧠 OpenAI raw result:", content);
 
     let cleaned = content?.replace(/```json|```|\n/g, "").trim();
