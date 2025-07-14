@@ -1,10 +1,10 @@
 export const config = {
   api: {
-    bodyParser: false
-  }
+    bodyParser: false,
+  },
 };
 
-// CORS wrapper for cross-origin requests from https://ctrlspeak.com
+// CORS wrapper (allow only CtrlSpeak.com)
 function allowCors(handler) {
   return async (req, res) => {
     res.setHeader("Access-Control-Allow-Credentials", true);
@@ -21,19 +21,73 @@ function allowCors(handler) {
   };
 }
 
+// Prompt logic per mode
+function buildPrompt(text, mode) {
+  switch (mode) {
+    case "interview":
+      return `
+You're a technical interviewer evaluating a candidate’s spoken answer.
+
+Here’s their response:
+
+"${text}"
+
+Evaluate it based on:
+- Accuracy
+- Use of technical terminology
+- Communication clarity
+
+Respond with a **valid JSON object only** like:
+{"score": 8, "feedback": "Your answer was mostly accurate but missed explaining edge cases."}
+`;
+
+    case "writing":
+      return `
+You're an English writing coach. A student submitted this email:
+
+"${text}"
+
+Evaluate it based on:
+- Grammar
+- Tone
+- Clarity
+- Structure
+
+Return a **valid JSON object only** like:
+{"score": 7, "feedback": "Good structure and tone, but a few grammar mistakes and missing greeting."}
+`;
+
+    case "code":
+    default:
+      return `
+You're an English tutor grading a student's spoken explanation of a code snippet.
+
+Here’s what they said:
+
+"${text}"
+
+Evaluate based on:
+- Fluency
+- Clarity
+- Use of technical vocabulary
+
+Respond with a **valid JSON object only** like:
+{"score": 9, "feedback": "You clearly explained the loop and used the correct terminology."}
+`;
+  }
+}
+
 async function handler(req, res) {
   try {
     // Parse raw body manually
     const rawBody = await new Promise((resolve, reject) => {
       let body = "";
-      req.on("data", chunk => (body += chunk));
+      req.on("data", (chunk) => (body += chunk));
       req.on("end", () => resolve(body));
-      req.on("error", err => reject(err));
+      req.on("error", (err) => reject(err));
     });
 
-    if (!rawBody) {
-      return res.status(400).json({ error: "Empty request body." });
-    }
+    if (!rawBody) return res.status(400).json({ error: "Empty request body." });
 
     let parsed;
     try {
@@ -42,66 +96,48 @@ async function handler(req, res) {
       return res.status(400).json({ error: "Invalid JSON body." });
     }
 
-    const { text } = parsed;
+    const { text, mode = "code" } = parsed;
 
-    if (!text) {
-      return res.status(400).json({ error: "Missing 'text' field in request body." });
-    }
+    if (!text) return res.status(400).json({ error: "Missing 'text' field." });
 
-    const prompt = `
-You're an English tutor grading a student's explanation of code. Here’s what they said:
+    const prompt = buildPrompt(text, mode);
 
-"${text}"
-
-Evaluate the explanation based on:
-- Fluency
-- Clarity
-- Use of technical vocabulary
-
-Give a score from 1 to 10. Then provide 1–2 sentences of constructive feedback.
-
-Respond with **only** a valid JSON object. No code blocks, no extra explanation, no text before or after. Format:
-{"score": 8, "feedback": "Your answer was clear and used the correct terminology."}
-`;
-
-    const openaiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
+    const openaiRes = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "gpt-3.5-turbo",
+        model: "gpt-4",
         messages: [{ role: "user", content: prompt }],
-        temperature: 0.5
-      })
+        temperature: 0.5,
+      }),
     });
 
-    const result = await openaiResponse.json();
+    const result = await openaiRes.json();
     console.log("🧠 Full OpenAI Response:", JSON.stringify(result, null, 2));
 
-    const content = result?.choices?.[0]?.message?.content;
-    console.log("🧠 OpenAI raw result:", content);
+    const raw = result?.choices?.[0]?.message?.content;
+    console.log("🧠 Raw Response:", raw);
 
-    let cleaned = content?.replace(/```json|```|\n/g, "").trim();
-    let feedbackObj;
+    // Clean up code block formatting
+    let cleaned = raw?.replace(/```json|```|\n/g, "").trim();
 
+    let parsedResult;
     try {
-      feedbackObj = JSON.parse(cleaned);
+      parsedResult = JSON.parse(cleaned);
     } catch (e) {
-      feedbackObj = {
+      parsedResult = {
         score: 5,
-        feedback: "Couldn't parse AI response. Please try again.\n\nRaw: " + content
+        feedback: "Couldn't parse AI response. Please try again.\n\nRaw: " + raw,
       };
     }
 
-    res.status(200).json(feedbackObj);
+    res.status(200).json(parsedResult);
   } catch (err) {
-    console.error("💥 Error in /api/grade:", err);
-    res.status(500).json({
-      error: "Internal Server Error",
-      message: err.message
-    });
+    console.error("💥 Handler Error:", err);
+    res.status(500).json({ error: "Internal Server Error", message: err.message });
   }
 }
 
